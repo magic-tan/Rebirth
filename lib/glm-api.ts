@@ -25,6 +25,12 @@ export interface GLMGoalBreakdown {
 export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown> {
   const API_KEY = process.env.NEXT_PUBLIC_GLM_API_KEY || '';
 
+  // 调试信息
+  console.log('=== GLM API Debug ===');
+  console.log('API_KEY configured:', !!API_KEY);
+  console.log('API_KEY length:', API_KEY.length);
+  console.log('API_KEY prefix:', API_KEY ? API_KEY.substring(0, 10) + '...' : 'N/A');
+
   if (!API_KEY) {
     console.warn('GLM API Key 未配置，使用默认模板');
     return getDefaultFallback(goal);
