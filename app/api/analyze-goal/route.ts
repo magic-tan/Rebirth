@@ -3,20 +3,19 @@ import { NextRequest, NextResponse } from 'next/server';
 const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 const API_KEY = process.env.GLM_API_KEY || '';
 
-// 系统提示词
-const SYSTEM_PROMPT = `你是一个专业的目标规划助手。用户会输入一个"重生之xxx"类型的目标，你需要将其拆解为具体的里程碑和可执行的小任务。
+// 系统提示词 - 更清晰的格式说明
+const SYSTEM_PROMPT = `你是一个专业的目标规划助手。将用户输入的"重生之xxx"目标拆解为里程碑和任务。
 
 规则：
-1. 时间线固定为1个月（4周），快速见效
+1. 时间线固定为1个月（4周）
 2. 拆解为4个里程碑，每周一个里程碑：
    - 第1周：启动与准备
    - 第2周：基础建立
    - 第3周：深化实践
    - 第4周：巩固与成果
 3. 每个里程碑包含3个具体可执行的任务
-4. 任务要具体、可量化、每天可执行
 
-返回格式（纯 JSON，不要其他内容）：
+严格按照以下JSON格式返回，不要有任何改动：
 {
   "title": "目标标题",
   "timeline": "1个月",
@@ -24,25 +23,43 @@ const SYSTEM_PROMPT = `你是一个专业的目标规划助手。用户会输入
     {
       "title": "第1周：启动与准备",
       "deadline": "第1周",
-      "tasks": [{"title": "任务1"}, {"title": "任务2"}, {"title": "任务3"}]
+      "tasks": [
+        {"title": "具体任务描述1"},
+        {"title": "具体任务描述2"},
+        {"title": "具体任务描述3"}
+      ]
     },
     {
       "title": "第2周：基础建立",
       "deadline": "第2周",
-      "tasks": [{"title": "任务1"}, {"title": "任务2"}, {"title": "任务3"}]
+      "tasks": [
+        {"title": "具体任务描述1"},
+        {"title": "具体任务描述2"},
+        {"title": "具体任务描述3"}
+      ]
     },
     {
       "title": "第3周：深化实践",
       "deadline": "第3周",
-      "tasks": [{"title": "任务1"}, {"title": "任务2"}, {"title": "任务3"}]
+      "tasks": [
+        {"title": "具体任务描述1"},
+        {"title": "具体任务描述2"},
+        {"title": "具体任务描述3"}
+      ]
     },
     {
       "title": "第4周：巩固与成果",
       "deadline": "第4周",
-      "tasks": [{"title": "任务1"}, {"title": "任务2"}, {"title": "任务3"}]
+      "tasks": [
+        {"title": "具体任务描述1"},
+        {"title": "具体任务描述2"},
+        {"title": "具体任务描述3"}
+      ]
     }
   ]
-}`;
+}
+
+注意：每个task对象的格式必须是 {"title": "任务描述"}，不要添加"任务1"、"任务2"这样的前缀。`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,7 +76,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查 API Key（记录关键信息用于调试）
     const apiKeyExists = !!API_KEY;
     const apiKeyPrefix = API_KEY ? API_KEY.substring(0, 10) + '...' : 'none';
     console.log('API Key 存在:', apiKeyExists, '前缀:', apiKeyPrefix);
@@ -72,7 +88,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 超时控制（增加到 30 秒）
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -101,8 +116,6 @@ export async function POST(request: NextRequest) {
       console.error('=== GLM API 错误 ===');
       console.error('状态码:', response.status);
       console.error('错误数据:', errorData);
-
-      // API 失败时返回默认模板，附带调试信息
       return NextResponse.json({
         ...getDefaultFallback(goal),
         _debug: {
@@ -114,10 +127,10 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+
     console.log('=== GLM API 原始响应 ===');
     console.log('完整响应:', JSON.stringify(data, null, 2));
-
-    const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
       console.error('GLM API 返回内容为空:', data);
@@ -136,14 +149,14 @@ export async function POST(request: NextRequest) {
       parsedContent = jsonMatch[0];
     }
 
-    // 修复中文标点和全角引号
-    parsedContent = parsedContent
-      .replace(/，/g, ',')
-      .replace(/：/g, ':')
-      .replace(/"/g, '"')
-      .replace(/"/g, '"')
-      .replace(/'/g, "'")
-      .replace(/'/g, "'");
+    console.log('=== 清理后的 JSON (解析前) ===');
+    console.log(parsedContent.substring(0, 500) + '...');
+
+    // 修复常见的 JSON 格式问题
+    parsedContent = fixJsonFormat(parsedContent);
+
+    console.log('=== 清理后的 JSON (解析后) ===');
+    console.log(parsedContent.substring(0, 500) + '...');
 
     const result = JSON.parse(parsedContent);
     console.log('GLM AI 分析成功:', result.title);
@@ -153,18 +166,67 @@ export async function POST(request: NextRequest) {
     console.error('=== API Route 异常 ===');
     console.error('错误类型:', error instanceof Error ? error.name : typeof error);
     console.error('错误信息:', error instanceof Error ? error.message : error);
-    console.error('错误堆栈:', error instanceof Error ? error.stack : 'none');
 
-    // 解析失败时返回默认模板，附带调试信息
-    const body = await request.clone().json().catch(() => ({ goal: '' }));
+    // 获取 goal 用于降级方案
+    let goal = '';
+    try {
+      const body = await request.json();
+      goal = body.goal || '';
+    } catch (e) {
+      // ignore
+    }
+
     return NextResponse.json({
-      ...getDefaultFallback(body.goal || ''),
+      ...getDefaultFallback(goal),
       _debug: {
         error: 'API_ROUTE_ERROR',
         message: error instanceof Error ? error.message : '未知错误'
       }
     });
   }
+}
+
+/**
+ * 修复 AI 返回的 JSON 格式问题
+ */
+function fixJsonFormat(jsonStr: string): string {
+  let result = jsonStr;
+
+  // 1. 修复中文标点
+  result = result
+    .replace(/，/g, ',')
+    .replace(/：/g, ':')
+    .replace(/"/g, '"')
+    .replace(/"/g, '"')
+    .replace(/'/g, "'")
+    .replace(/'/g, "'");
+
+  // 2. 修复任务格式：{"title": "任务1": "描述"} → {"title": "描述"}
+  // 匹配 {"title": "任务数字/序号": "内容"} 或 {"title": "任务X": "内容"}
+  result = result.replace(
+    /\{\s*"title"\s*:\s*"[任务\d一二三四五六七八九\w:]+"\s*:\s*"([^"]+)"\s*\}/g,
+    '{"title": "$1"}'
+  );
+
+  // 3. 修复 {"title": "任务1":"描述"} (没有空格的版本)
+  result = result.replace(
+    /\{\s*"title"\s*:\s*"[\w:]+"\s*:\s*"([^"]+)"\s*\}/g,
+    '{"title": "$1"}'
+  );
+
+  // 4. 修复更复杂的格式：{"title": "任务1：描述"}
+  result = result.replace(
+    /\{\s*"title"\s*:\s*"[\u4e00-\u9fa5\w:：\d]+\s*[:：]\s*([^"]+)"\s*\}/g,
+    '{"title": "$1"}'
+  );
+
+  // 5. 清理多余的逗号（如 "a": 1, } → "a": 1 }）
+  result = result.replace(/,\s*([}\]])/g, '$1');
+
+  // 6. 清理控制字符
+  result = result.replace(/[\x00-\x1F\x7F]/g, '');
+
+  return result;
 }
 
 // 默认降级模板
