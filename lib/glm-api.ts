@@ -131,6 +131,18 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
       parsedContent = jsonMatch[0];
     }
 
+    // 清理可能的问题字符（如中文标点和控制字符）
+    parsedContent = parsedContent
+      .replace(/，/g, ',')      // 中文逗号转英文
+      .replace(/：/g, ':')      // 中文冒号转英文
+      .replace(/"/g, '"')       // 中文双引号转英文
+      .replace(/"/g, '"')       // 中文双引号转英文
+      .replace(/'/g, "'")       // 中文单引号转英文
+      .replace(/'/g, "'")       // 中文单引号转英文
+      .replace(/[\n\r\t]/g, '') // 移除换行和制表符
+      .replace(/\s+/g, ' ')     // 多个空格合并为一个
+      .trim();
+
     const result: GLMGoalBreakdown = JSON.parse(parsedContent);
     console.log('GLM AI 分析成功:', result.title);
     return result;
