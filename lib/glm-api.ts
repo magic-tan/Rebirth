@@ -117,6 +117,11 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
+    // 调试：打印 AI 返回的原始内容
+    console.log('=== GLM API 原始返回 ===');
+    console.log(content);
+    console.log('=== 返回内容结束 ===');
+
     if (!content) {
       console.error('GLM API 返回内容为空:', data);
       throw new Error('GLM API 返回内容为空');
@@ -142,6 +147,11 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
       .replace(/[\n\r\t]/g, '') // 移除换行和制表符
       .replace(/\s+/g, ' ')     // 多个空格合并为一个
       .trim();
+
+    // 调试：打印清理后的内容
+    console.log('=== 清理后的 JSON ===');
+    console.log(parsedContent);
+    console.log('=== 清理内容结束 ===');
 
     const result: GLMGoalBreakdown = JSON.parse(parsedContent);
     console.log('GLM AI 分析成功:', result.title);
