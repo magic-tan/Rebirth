@@ -1,7 +1,5 @@
-// GLM-4.7 API 服务
-// 使用智谱 AI 的 GLM-4 模型进行目标智能拆解
-
-const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+// GLM-4.7 API 客户端
+// 通过 Next.js API Route 安全地调用智谱 AI
 
 export interface GLMMilestone {
   title: string;
@@ -18,150 +16,36 @@ export interface GLMGoalBreakdown {
 }
 
 /**
- * 调用 GLM-4.7 API 拆解目标
+ * 调用 GLM-4.7 API 拆解目标（通过服务端 API Route）
  * @param goal 用户输入的目标
  * @returns 拆解后的里程碑和任务
  */
 export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown> {
-  const API_KEY = process.env.NEXT_PUBLIC_GLM_API_KEY || '';
-
-  if (!API_KEY) {
-    console.warn('GLM API Key 未配置，使用默认模板');
+  if (!goal.trim()) {
+    console.warn('目标内容为空，使用默认模板');
     return getDefaultFallback(goal);
   }
 
   try {
-    const response = await fetch(API_URL, {
+    const response = await fetch('/api/analyze-goal', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
       },
-      body: JSON.stringify({
-        model: 'glm-4-flash',
-        messages: [
-          {
-            role: 'system',
-            content: `你是一个专业的目标规划助手。用户会输入一个"重生之xxx"类型的目标，你需要将其拆解为具体的里程碑和可执行的小任务。
-
-规则：
-1. 时间线固定为1个月（4周），快速见效
-2. 拆解为4个里程碑，每周一个里程碑：
-   - 第1周：启动与准备
-   - 第2周：基础建立
-   - 第3周：深化实践
-   - 第4周：巩固与成果
-3. 每个里程碑包含3个具体可执行的任务
-4. 任务要具体、可量化、每天可执行
-
-返回格式（纯 JSON，不要其他内容）：
-{
-  "title": "目标标题",
-  "timeline": "1个月",
-  "milestones": [
-    {
-      "title": "第1周：启动与准备",
-      "deadline": "第1周",
-      "tasks": [
-        {"title": "任务1"},
-        {"title": "任务2"},
-        {"title": "任务3"}
-      ]
-    },
-    {
-      "title": "第2周：基础建立",
-      "deadline": "第2周",
-      "tasks": [
-        {"title": "任务1"},
-        {"title": "任务2"},
-        {"title": "任务3"}
-      ]
-    },
-    {
-      "title": "第3周：深化实践",
-      "deadline": "第3周",
-      "tasks": [
-        {"title": "任务1"},
-        {"title": "任务2"},
-        {"title": "任务3"}
-      ]
-    },
-    {
-      "title": "第4周：巩固与成果",
-      "deadline": "第4周",
-      "tasks": [
-        {"title": "任务1"},
-        {"title": "任务2"},
-        {"title": "任务3"}
-      ]
-    }
-  ]
-}`
-          },
-          {
-            role: 'user',
-            content: `请帮我拆解这个目标：${goal}`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
+      body: JSON.stringify({ goal }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('GLM API Error:', response.status, errorData);
-      throw new Error(`GLM API 请求失败: ${response.status}`);
+      throw new Error(`API 请求失败: ${response.status}`);
     }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    // 调试：打印 AI 返回的原始内容
-    console.log('=== GLM API 原始返回 ===');
-    console.log(content);
-    console.log('=== 返回内容结束 ===');
-
-    if (!content) {
-      console.error('GLM API 返回内容为空:', data);
-      throw new Error('GLM API 返回内容为空');
-    }
-
-    // 解析 JSON 响应
-    let parsedContent = content.trim();
-
-    // 尝试提取 JSON 部分（处理可能的前后缀）
-    const jsonMatch = parsedContent.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      parsedContent = jsonMatch[0];
-    }
-
-    // 清理可能的问题字符（如中文标点和控制字符）
-    parsedContent = parsedContent
-      .replace(/，/g, ',')      // 中文逗号转英文
-      .replace(/：/g, ':')      // 中文冒号转英文
-      .replace(/"/g, '"')       // 中文双引号转英文
-      .replace(/"/g, '"')       // 中文双引号转英文
-      .replace(/'/g, "'")       // 中文单引号转英文
-      .replace(/'/g, "'")       // 中文单引号转英文
-      .replace(/[\n\r\t]/g, '') // 移除换行和制表符
-      .replace(/\s+/g, ' ')     // 多个空格合并为一个
-      .trim();
-
-    // 调试：打印清理后的内容
-    console.log('=== 清理后的 JSON ===');
-    console.log(parsedContent);
-    console.log('=== 清理内容结束 ===');
-
-    const result: GLMGoalBreakdown = JSON.parse(parsedContent);
-    console.log('GLM AI 分析成功:', result.title);
+    const result: GLMGoalBreakdown = await response.json();
+    console.log('目标分析成功:', result.title);
     return result;
 
   } catch (error) {
-    console.error('GLM API 调用失败:', error instanceof Error ? error.message : error);
+    console.error('API 调用失败:', error instanceof Error ? error.message : error);
     console.log('使用默认模板代替');
-
-    // 返回默认模板作为降级方案
     return getDefaultFallback(goal);
   }
 }
@@ -171,7 +55,7 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
  */
 function getDefaultFallback(goal: string): GLMGoalBreakdown {
   return {
-    title: goal,
+    title: goal || '默认目标规划',
     timeline: '1个月',
     milestones: [
       {
