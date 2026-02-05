@@ -25,12 +25,6 @@ export interface GLMGoalBreakdown {
 export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown> {
   const API_KEY = process.env.NEXT_PUBLIC_GLM_API_KEY || '';
 
-  // 调试信息
-  console.log('=== GLM API Debug ===');
-  console.log('API_KEY configured:', !!API_KEY);
-  console.log('API_KEY length:', API_KEY.length);
-  console.log('API_KEY prefix:', API_KEY ? API_KEY.substring(0, 10) + '...' : 'N/A');
-
   if (!API_KEY) {
     console.warn('GLM API Key 未配置，使用默认模板');
     return getDefaultFallback(goal);
@@ -116,7 +110,7 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('GLM API Error:', errorData);
+      console.error('GLM API Error:', response.status, errorData);
       throw new Error(`GLM API 请求失败: ${response.status}`);
     }
 
@@ -124,6 +118,7 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
+      console.error('GLM API 返回内容为空:', data);
       throw new Error('GLM API 返回内容为空');
     }
 
@@ -137,10 +132,12 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
     }
 
     const result: GLMGoalBreakdown = JSON.parse(parsedContent);
+    console.log('GLM AI 分析成功:', result.title);
     return result;
 
   } catch (error) {
-    console.error('GLM API 调用失败:', error);
+    console.error('GLM API 调用失败:', error instanceof Error ? error.message : error);
+    console.log('使用默认模板代替');
 
     // 返回默认模板作为降级方案
     return getDefaultFallback(goal);
