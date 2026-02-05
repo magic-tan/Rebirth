@@ -39,12 +39,22 @@ export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown
       throw new Error(`API 请求失败: ${response.status}`);
     }
 
-    const result: GLMGoalBreakdown = await response.json();
+    const result: GLMGoalBreakdown & { _debug?: any } = await response.json();
+
+    // 显示调试信息
+    if (result._debug) {
+      console.warn('=== AI 调试信息 ===');
+      console.warn('错误类型:', result._debug.error);
+      console.warn('错误信息:', result._debug.message);
+      console.warn('==================');
+    }
+
     console.log('目标分析成功:', result.title);
     return result;
 
   } catch (error) {
-    console.error('API 调用失败:', error instanceof Error ? error.message : error);
+    console.error('=== API 调用异常 ===');
+    console.error('错误:', error instanceof Error ? error.message : error);
     console.log('使用默认模板代替');
     return getDefaultFallback(goal);
   }

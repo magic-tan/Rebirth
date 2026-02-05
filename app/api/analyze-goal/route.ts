@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { goal } = body;
 
+    console.log('=== API Route 被调用 ===');
+    console.log('收到目标:', goal);
+
     if (!goal || !goal.trim()) {
       return NextResponse.json(
         { error: '目标内容不能为空' },
@@ -56,15 +59,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查 API Key
+    // 检查 API Key（记录关键信息用于调试）
+    const apiKeyExists = !!API_KEY;
+    const apiKeyPrefix = API_KEY ? API_KEY.substring(0, 10) + '...' : 'none';
+    console.log('API Key 存在:', apiKeyExists, '前缀:', apiKeyPrefix);
+
     if (!API_KEY) {
       console.warn('GLM API Key 未配置');
-      return NextResponse.json(getDefaultFallback(goal));
+      return NextResponse.json({
+        ...getDefaultFallback(goal),
+        _debug: { error: 'API_KEY_MISSING', message: '服务端 API Key 未配置' }
+      });
     }
 
-    // 超时控制
+    // 超时控制（增加到 30 秒）
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(API_URL, {
       method: 'POST',
@@ -88,17 +98,33 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('GLM API Error:', response.status, errorData);
-      // API 失败时返回默认模板
-      return NextResponse.json(getDefaultFallback(goal));
+      console.error('=== GLM API 错误 ===');
+      console.error('状态码:', response.status);
+      console.error('错误数据:', errorData);
+
+      // API 失败时返回默认模板，附带调试信息
+      return NextResponse.json({
+        ...getDefaultFallback(goal),
+        _debug: {
+          error: 'GLM_API_ERROR',
+          status: response.status,
+          message: errorData.error?.message || 'API 请求失败'
+        }
+      });
     }
 
     const data = await response.json();
+    console.log('=== GLM API 原始响应 ===');
+    console.log('完整响应:', JSON.stringify(data, null, 2));
+
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
       console.error('GLM API 返回内容为空:', data);
-      return NextResponse.json(getDefaultFallback(goal));
+      return NextResponse.json({
+        ...getDefaultFallback(goal),
+        _debug: { error: 'EMPTY_CONTENT', message: 'API 返回内容为空' }
+      });
     }
 
     // 解析 JSON 响应
@@ -124,11 +150,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
-    console.error('GLM API 调用失败:', error instanceof Error ? error.message : error);
+    console.error('=== API Route 异常 ===');
+    console.error('错误类型:', error instanceof Error ? error.name : typeof error);
+    console.error('错误信息:', error instanceof Error ? error.message : error);
+    console.error('错误堆栈:', error instanceof Error ? error.stack : 'none');
 
-    // 解析失败时返回默认模板
-    const body = await request.json().catch(() => ({ goal: '' }));
-    return NextResponse.json(getDefaultFallback(body.goal || ''));
+    // 解析失败时返回默认模板，附带调试信息
+    const body = await request.clone().json().catch(() => ({ goal: '' }));
+    return NextResponse.json({
+      ...getDefaultFallback(body.goal || ''),
+      _debug: {
+        error: 'API_ROUTE_ERROR',
+        message: error instanceof Error ? error.message : '未知错误'
+      }
+    });
   }
 }
 
