@@ -1,7 +1,6 @@
 // GLM-4.7 API 服务
 // 使用智谱 AI 的 GLM-4 模型进行目标智能拆解
 
-const API_KEY = '30d5adb4f23749a49e07ccc4311d3c28.Wa9Lzxsc1XrFy7WP';
 const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
 export interface GLMMilestone {
@@ -24,6 +23,13 @@ export interface GLMGoalBreakdown {
  * @returns 拆解后的里程碑和任务
  */
 export async function analyzeGoalWithGLM(goal: string): Promise<GLMGoalBreakdown> {
+  const API_KEY = process.env.NEXT_PUBLIC_GLM_API_KEY || '';
+
+  if (!API_KEY) {
+    console.warn('GLM API Key 未配置，使用默认模板');
+    return getDefaultFallback(goal);
+  }
+
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
