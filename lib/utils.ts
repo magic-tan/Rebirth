@@ -13,12 +13,12 @@ export function formatDate(dateString: string): string {
   return format(date, 'M月d日 EEEE', { locale: zhCN });
 }
 
-// 生成周历
+// 生成周历 - 从今天开始的7天
 export function generateWeekDays(tasks: any[]) {
   const days = [];
   const today = new Date();
 
-  for (let i = -3; i <= 3; i++) {
+  for (let i = 0; i < 7; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     const dateStr = date.toDateString();

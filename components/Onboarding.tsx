@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { analyzeGoalWithGLM } from '@/lib/glm-api';
 
 export default function Onboarding() {
-  const { setAnalyzing, setAnalyzingGoal, setUserGoal, setTasks } = useStore();
+  const { setAnalyzing, setAnalyzingGoal, setUserGoal, setTasks, setCurrentPage, setSelectedDate } = useStore();
   const [goalInput, setGoalInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -103,21 +103,39 @@ export default function Onboarding() {
     setIsLoading(false);
     setUserGoal(matchedTemplate);
 
-    // 生成今日任务
-    const today = new Date().toDateString();
+    // 生成从今天开始的7天任务
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toDateString();
+
     const firstMilestone = matchedTemplate.milestones[0];
-    const newTasks = firstMilestone?.tasks.map((mt: any, index: number) => ({
-      id: Date.now() + index,
-      title: mt.title,
-      time: `${String(8 + index * 2).padStart(2, '0')}:00`,
-      completed: mt.completed,
-      date: today,
-      milestoneId: firstMilestone.id,
-      milestoneTaskId: mt.id,
-      milestoneTitle: firstMilestone.title,
-    })) || [];
+    const weekDays = ['今天', '明天', '后天', '周四', '周五', '周六', '周日'];
+    const weekDaysFull = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    const newTasks = firstMilestone?.tasks.map((mt: any, index: number) => {
+      const taskDate = new Date(today);
+      taskDate.setDate(today.getDate() + index);
+
+      // 计算这天是周几
+      const dayOfWeek = (today.getDay() + index) % 7;
+      const dayName = weekDaysFull[dayOfWeek === 0 ? 6 : dayOfWeek - 1];
+
+      return {
+        id: Date.now() + index,
+        title: mt.title,
+        time: '09:00',
+        completed: mt.completed,
+        date: taskDate.toDateString(),
+        milestoneId: firstMilestone.id,
+        milestoneTaskId: mt.id,
+        milestoneTitle: firstMilestone.title,
+        dayOfWeek: dayName,
+      };
+    }) || [];
 
     setTasks(newTasks);
+    setSelectedDate(todayStr);
+    setCurrentPage('home');
     setAnalyzing(false);
   };
 

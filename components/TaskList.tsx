@@ -4,9 +4,12 @@ import { useStore } from '@/lib/store';
 import { useState } from 'react';
 
 export default function TaskList() {
-  const { tasks, selectedDate, toggleTaskCompletion, updateTask, deleteTask } = useStore();
+  const { tasks, selectedDate, toggleTaskCompletion, updateTask, deleteTask, setTasks } = useStore();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [splittingId, setSplittingId] = useState<number | null>(null);
+  const [editingTimeId, setEditingTimeId] = useState<number | null>(null);
+  const [timeValue, setTimeValue] = useState('');
 
   const filteredTasks = tasks
     .filter((t) => t.date === selectedDate)
@@ -34,6 +37,59 @@ export default function TaskList() {
   const cancelEdit = () => {
     setEditingId(null);
     setEditValue('');
+  };
+
+  // 时间编辑
+  const startTimeEdit = (id: number, time: string) => {
+    setEditingTimeId(id);
+    setTimeValue(time);
+  };
+
+  const saveTimeEdit = (id: number) => {
+    if (timeValue) {
+      updateTask(id, { time: timeValue });
+    }
+    setEditingTimeId(null);
+    setTimeValue('');
+  };
+
+  const cancelTimeEdit = () => {
+    setEditingTimeId(null);
+    setTimeValue('');
+  };
+
+  // AI 拆分任务
+  const handleSplitTask = async (task: any) => {
+    setSplittingId(task.id);
+    try {
+      const response = await fetch('/api/split-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskTitle: task.title }),
+      });
+      const data = await response.json();
+
+      if (data.subtasks && data.subtasks.length > 0) {
+        // 删除原任务
+        const newTasks = tasks.filter((t) => t.id !== task.id);
+        // 添加子任务
+        const subtasks = data.subtasks.map((st: any, index: number) => ({
+          id: Date.now() + index,
+          title: st.title,
+          time: task.time,
+          completed: false,
+          date: task.date,
+          milestoneId: task.milestoneId,
+          milestoneTaskId: task.milestoneTaskId,
+          milestoneTitle: task.milestoneTitle,
+        }));
+        setTasks([...subtasks, ...newTasks]);
+      }
+    } catch (error) {
+      console.error('AI 拆分失败:', error);
+    } finally {
+      setSplittingId(null);
+    }
   };
 
   if (filteredTasks.length === 0) {
@@ -67,11 +123,33 @@ export default function TaskList() {
               task.completed ? 'opacity-50 border-success/30' : 'border-transparent hover:border-primary/20'
             }`}
           >
-            {/* 时间显示 - 简洁的 "10:00" 格式 */}
-            <div className="flex-shrink-0 w-14 h-14 bg-gray-100 flex items-center justify-center rounded-2xl">
-              <span className="text-sm font-bold text-title">
-                {task.time}
-              </span>
+            {/* 时间显示 - 可点击编辑 */}
+            <div className="flex-shrink-0">
+              {editingTimeId === task.id ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="time"
+                    value={timeValue}
+                    onChange={(e) => setTimeValue(e.target.value)}
+                    onBlur={() => saveTimeEdit(task.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveTimeEdit(task.id);
+                      if (e.key === 'Escape') cancelTimeEdit();
+                    }}
+                    className="w-20 h-14 px-2 bg-white border-2 border-primary rounded-2xl text-sm font-bold text-title focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => startTimeEdit(task.id, task.time)}
+                  className="w-14 h-14 bg-gray-100 hover:bg-gray-200 flex items-center justify-center rounded-2xl transition-colors"
+                >
+                  <span className="text-sm font-bold text-title">
+                    {task.time}
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* 任务内容 */}
@@ -127,6 +205,26 @@ export default function TaskList() {
             {/* 操作按钮组 - 编辑时隐藏 */}
             {!isEditing && (
               <div className="flex items-center gap-2 flex-shrink-0">
+                {/* AI 拆分按钮 - 只在未完成时显示 */}
+                {!task.completed && (
+                  <button
+                    onClick={() => handleSplitTask(task)}
+                    disabled={splittingId === task.id}
+                    className="w-10 h-10 flex items-center justify-center bg-gradient-to-r from-primary to-purple hover:opacity-90 rounded-xl transition-colors"
+                  >
+                    {splittingId === task.id ? (
+                      <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+
                 {/* 编辑按钮 - 只在未完成时显示 */}
                 {!task.completed && (
                   <button
