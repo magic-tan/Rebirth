@@ -34,3 +34,6 @@ next-env.d.ts
 
 # memory (development only)
 memory.md
+
+# clerk configuration (can include secrets)
+/.clerk/
